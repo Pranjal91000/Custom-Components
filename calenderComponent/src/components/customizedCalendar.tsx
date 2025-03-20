@@ -1,38 +1,91 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import calendarLogo from "../assets/calendar_img.png";
 
-const CalendarComponent = ({ setDate="", handleChange}) => {
-    if(setDate) {
-        setDate=new Date(Number(setDate.split('/')[2]),Number(setDate.split('/')[1])-1,Number(setDate.split('/')[0]))
+const dateFormatter =(date: Date, formatType: string) =>{
+    const dateMap = new Map([
+        ["dd/mm/yyyy", 1],
+        ["mm/dd/yyyy", 2],
+        ["yyyy/mm/dd", 3],
+        ["dd/mmm/yyyy",4],
+        ["dd/mm/yy",5],
+    ]);
+    if(dateMap.has(formatType)){
+        let type = dateMap.get(formatType);
+        switch(type){
+            case 1:
+                return `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth()+1).padStart(2, '0')}/${String(date.getFullYear()).padStart(4, '0')}`;
+            case 2:
+                return `${String(date.getMonth()+1).padStart(2, '0')}/${String(date.getDate()).padStart(2, '0')}/${String(date.getFullYear()).padStart(4, '0')}`;
+            case 3:
+                return `${String(date.getFullYear()).padStart(4, '0')}/${String(date.getMonth()+1).padStart(2, '0')}/${String(date.getDate()).padStart(2, '0')}`;
+            case 4:
+                return `${String(date.getDate()).padStart(2, '0')}/${date.toLocaleDateString("en-US", { month: "narrow" })}/${String(date.getFullYear()).padStart(4, '0')}`; 
+            case 5:
+                return `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth()+1).padStart(2, '0')}/${date.toLocaleDateString("en-US",{year: "2-digit"})}`;
+        }
 
     }
+    else{
+        throw console.error("Supplied Date Format is not recognised");
+    }
+}
+
+const CalendarComponent = ({ setDate="", handleChange, formatType="dd/mm/yyyy"}) => {
+    if(setDate) {
+        setDate=new Date(Number(setDate.split('/')[2]),Number(setDate.split('/')[1])-1,Number(setDate.split('/')[0]));
+    }
     const [calendarVisible, setCalendarVisible] = useState(false);
+    const [edited, setEdited] = useState(false);
     const [view, setView] = useState("days"); // "days", "months", "years"
     const today = new Date();
     const [currDate, setCurrDate] = useState(setDate || today);
     const [selectedDate, setSelectedDate] = useState(setDate || today);
-
+    const calendarRef = useRef(null);
     const updateCalendarVisibility = () => {
         setCalendarVisible(!calendarVisible);
     };
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (calendarRef.current && !calendarRef.current.contains(event.target)) {
+                setCalendarVisible(false);
+            }
+        };
+        document.addEventListener("click", handleClickOutside);
+        return () => {
+            document.removeEventListener("click", handleClickOutside);
+        };
+    }, []);
 
     useEffect(() => {
-        let date = `${String(selectedDate.getDate()).padStart(2, '0')}/${String(selectedDate.getMonth() + 1).padStart(2, '0')}/${selectedDate.getFullYear()}`;
-       // handleChange(date);
+        let date = dateFormatter(selectedDate, formatType);
+       if(edited){
+        console.log("Returning Date: ",date);
+        //handleChange(date);
+       } 
        setCalendarVisible(false);
     }, [selectedDate]);
     
 
     return (
-        <div>
-            <input id="calendar-val" type="text" readOnly value={`${String(selectedDate.getDate()).padStart(2, '0')}/${String(selectedDate.getMonth() + 1).padStart(2, '0')}/${selectedDate.getFullYear()}`} />
-            <button id="calendarBtn" onClick={updateCalendarVisibility}>
-                <img src={calendarLogo} alt="Calendar Icon" />
-            </button>
+        <div  ref={calendarRef}>
+            <div className="input-container">
+                <label className="input-label">Document Date</label>
+                <input 
+                    id="calendar-val" 
+                    type="text" 
+                    onClick={() => setCalendarVisible(true)} 
+                    readOnly 
+                    value={ edited ? (`${String(selectedDate.getDate()).padStart(2, '0')}/${String(selectedDate.getMonth() + 1).padStart(2, '0')}/${selectedDate.getFullYear()}`) : ""} 
+                />
+                <button id="calendarBtn" onClick={updateCalendarVisibility}>
+                    <img src={calendarLogo} alt="Calendar Icon" />
+                </button>
+            </div>
+            
             {calendarVisible && (
-                <div className="calendar-popup">
+                <div className="calendar-popup" onClick={(e) => e.stopPropagation()}>
                     <CalendarDate today={today} />
-                    {view === "days" && <DaysView currDate={currDate} selectedDate={selectedDate} setSelectedDate={setSelectedDate} setView={setView} setCurrDate={setCurrDate} />}
+                    {view === "days" && <DaysView currDate={currDate} selectedDate={selectedDate} setSelectedDate={setSelectedDate} setView={setView} setCurrDate={setCurrDate} setEdited={setEdited}/>}
                     {view === "months" && <MonthsView setCurrDate={setCurrDate} setView={setView} currDate={currDate} />}
                     {view === "years" && <YearsView setCurrDate={setCurrDate} setView={setView} currDate={currDate}/>}
                 </div>
@@ -51,7 +104,7 @@ const CalendarDate = ({ today }) => {
     );
 };
 
-const DaysView = ({ currDate, selectedDate, setSelectedDate, setView, setCurrDate }) => {
+const DaysView = ({ currDate, selectedDate, setSelectedDate, setView, setCurrDate, setEdited }) => {
     const firstDayOfMonth = new Date(currDate.getFullYear(), currDate.getMonth(), 1).getDay();
     const lastDateOfMonth = new Date(currDate.getFullYear(), currDate.getMonth() + 1, 0).getDate();
     const lastDateOfPrevMonth = new Date(currDate.getFullYear(), currDate.getMonth(), 0).getDate();
@@ -89,7 +142,7 @@ const DaysView = ({ currDate, selectedDate, setSelectedDate, setView, setCurrDat
     return (
         <>
         <div className="calendar-header">
-            <div className="leftAlign">
+            <div className="leftAlign navigation-info">
                 <span onClick={() => setView("months")}>{currDate.toLocaleDateString("en-US", { month: "long" })},{currDate.getFullYear()}</span>
             </div>
             <div className="rightAlign">
@@ -115,8 +168,11 @@ const DaysView = ({ currDate, selectedDate, setSelectedDate, setView, setCurrDat
                                     dateObj.type === "next" ? "next-month" : "",
                                     dateObj.type === "current" && new Date(dateObj.year, dateObj.month, dateObj.day).toDateString() === selectedDate.toDateString() ? "selected" : "",
                                 ].filter(Boolean).join(" ")}
-                                onClick={()=>setCurrDate(new Date(dateObj.year, dateObj.month, dateObj.day))}
-                                onDoubleClick={() => setSelectedDate(new Date(dateObj.year, dateObj.month, dateObj.day))}
+                                onClick={()=>{
+                                    setEdited(true);
+                                    setCurrDate(new Date(dateObj.year, dateObj.month, dateObj.day)),
+                                    setSelectedDate(new Date(dateObj.year, dateObj.month, dateObj.day))
+                                }}
                             >
                                 {dateObj.day}
                             </div>
@@ -134,7 +190,7 @@ const MonthsView = ({ setCurrDate, setView, currDate }) => {
     return (
         <>
             <div className="calendar-header">
-            <div className="leftAlign">
+            <div className="leftAlign navigation-info">
                 <span onClick={() => setView("years")}> {currDate.getFullYear()}</span>
             </div>
             <div className="rightAlign">
@@ -160,7 +216,7 @@ const YearsView = ({ setCurrDate, setView, currDate }) => {
     return (
         <>
             <div className="calendar-header">
-            <div>
+            <div className="navigation-info">
                 {years[0]} - {years[11]}
             </div>
             <div className="rightAlign">
